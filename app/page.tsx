@@ -14,7 +14,7 @@ export default function Home() {
             Collect, manage, and respond to user feedback with our beautiful and intuitive platform. Built with Next.js,
             TypeScript, and NotDatabase.
           </p>
-          <div className="flex gap-4 justify-center">
+          <div className="flex flex-col md:flex-row  gap-4 justify-center">
             <Link href="/feedback/submit">
               <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
                 <MessageSquare className="mr-2 h-5 w-5" />
