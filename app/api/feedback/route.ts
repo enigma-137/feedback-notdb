@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     const status = searchParams.get("status")
     const limit = searchParams.get("limit")
 
-    const filter: any = {}
+    const filter: Record<string, string | undefined> = {}
     if (category && category !== "all") filter.category = category
     if (status && status !== "all") filter.status = status
 

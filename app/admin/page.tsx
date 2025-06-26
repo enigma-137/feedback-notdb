@@ -1,66 +1,34 @@
-"use client"
-
-import { useState, useEffect } from "react"
+import { cookies } from "next/headers"
+import db from "@/lib/nodb"
+import { redirect } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Star, MessageSquare, Filter, ArrowLeft, Send } from "lucide-react"
+import { Star, MessageSquare,  ArrowLeft, Send } from "lucide-react"
 import Link from "next/link"
-import type { Feedback } from "@/lib/nodb"
+// import type { Feedback } from "@/lib/nodb"
 
-export default function AdminDashboard() {
-  const [feedback, setFeedback] = useState<Feedback[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({
-    category: "all",
-    status: "all",
-  })
-  const [responses, setResponses] = useState<Record<string, string>>({})
-
-  useEffect(() => {
-    fetchFeedback()
-  }, [filters])
-
-  const fetchFeedback = async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (filters.category !== "all") params.set("category", filters.category)
-      if (filters.status !== "all") params.set("status", filters.status)
-
-      const res = await fetch(`/api/feedback?${params}`)
-      if (res.ok) {
-        const data = await res.json()
-        setFeedback(data)
-      }
-    } catch (error) {
-      console.error("Failed to fetch feedback:", error)
-    } finally {
-      setLoading(false)
-    }
+export default async function AdminDashboard() {
+  const cookieStore = await cookies()
+  const adminSession = cookieStore.get("admin_session")?.value
+  const users = adminSession ? await db.users.find({ filter: { _id: adminSession }, limit: 1 }) : []
+  const user = users[0]
+  if (!user || !user.isAdmin) {
+    redirect("/admin/login")
   }
 
-  const updateFeedback = async (id: string, status: string, adminResponse?: string) => {
-    try {
-      const res = await fetch(`/api/feedback/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status,
-          adminResponse,
-          adminUserId: "admin_demo",
-        }),
-      })
+  // Fetch feedback server-side
+  const feedback = await db.feedback.find({
+    sort: "-createdAt",
+  })
 
-      if (res.ok) {
-        fetchFeedback() // Refresh the list
-        setResponses((prev) => ({ ...prev, [id]: "" })) // Clear response field
-      }
-    } catch (error) {
-      console.error("Failed to update feedback:", error)
-    }
+  const stats = {
+    total: feedback.length,
+    open: feedback.filter((f) => f.status === "open").length,
+    avgRating:
+      feedback.length > 0 ? (feedback.reduce((sum, f) => sum + f.rating, 0) / feedback.length).toFixed(1) : "0",
   }
 
   const getStatusColor = (status: string) => {
@@ -89,13 +57,6 @@ export default function AdminDashboard() {
       default:
         return "bg-gray-100 text-gray-800"
     }
-  }
-
-  const stats = {
-    total: feedback.length,
-    open: feedback.filter((f) => f.status === "open").length,
-    avgRating:
-      feedback.length > 0 ? (feedback.reduce((sum, f) => sum + f.rating, 0) / feedback.length).toFixed(1) : "0",
   }
 
   return (
@@ -143,59 +104,13 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
-        {/* Filters */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Filters
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Category</label>
-                <Select value={filters.category} onValueChange={(value) => setFilters({ ...filters, category: value })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    <SelectItem value="general">General</SelectItem>
-                    <SelectItem value="feature">Feature Request</SelectItem>
-                    <SelectItem value="bug">Bug Report</SelectItem>
-                    <SelectItem value="ui">UI/UX</SelectItem>
-                    <SelectItem value="performance">Performance</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Status</label>
-                <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="open">Open</SelectItem>
-                    <SelectItem value="reviewed">Reviewed</SelectItem>
-                    <SelectItem value="closed">Closed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Feedback List */}
         <div className="space-y-4">
-          {loading ? (
-            <div className="text-center py-8">Loading feedback...</div>
-          ) : feedback.length === 0 ? (
+          {feedback.length === 0 ? (
             <Card>
               <CardContent className="text-center py-8">
                 <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">No feedback found matching your filters.</p>
+                <p className="text-gray-600">No feedback found.</p>
               </CardContent>
             </Card>
           ) : (
@@ -245,36 +160,19 @@ export default function AdminDashboard() {
                   <div className="space-y-3">
                     <Textarea
                       placeholder="Write your response..."
-                      value={responses[item._id] || ""}
-                      onChange={(e) =>
-                        setResponses((prev) => ({
-                          ...prev,
-                          [item._id]: e.target.value,
-                        }))
-                      }
                       rows={3}
                     />
                     <div className="flex gap-2">
-                      <Button
-                        onClick={() => updateFeedback(item._id, "reviewed", responses[item._id])}
-                        variant="outline"
-                        size="sm"
-                      >
+                      <Button variant="outline" size="sm">
                         Mark as Reviewed
                       </Button>
-                      <Button
-                        onClick={() => updateFeedback(item._id, "closed", responses[item._id])}
-                        variant="outline"
-                        size="sm"
-                      >
+                      <Button variant="outline" size="sm">
                         Close
                       </Button>
-                      {responses[item._id] && (
-                        <Button onClick={() => updateFeedback(item._id, item.status, responses[item._id])} size="sm">
-                          <Send className="mr-2 h-4 w-4" />
-                          Send Response
-                        </Button>
-                      )}
+                      <Button size="sm">
+                        <Send className="mr-2 h-4 w-4" />
+                        Send Response
+                      </Button>
                     </div>
                   </div>
                 </CardContent>

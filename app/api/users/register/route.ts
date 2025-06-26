@@ -1,18 +1,22 @@
 import { NextResponse } from "next/server"
 import db from  "@/lib/nodb"
+import bcrypt from "bcryptjs"
 
 export async function POST(request: Request) {
   try {
-    const { email, name } = await request.json()
+    const { email, name, password } = await request.json()
 
-    if (!email || !name) {
-      return NextResponse.json({ error: "Email and name are required" }, { status: 400 })
+    if (!email || !name || !password) {
+      return NextResponse.json({ error: "Email, name, and password are required" }, { status: 400 })
     }
+
+    const hashedPassword = await bcrypt.hash(password, 10)
 
     const user = await db.users.insert({
       email: email.toLowerCase(),
       name,
       isAdmin: false,
+      password: hashedPassword,
     })
 
     return NextResponse.json(

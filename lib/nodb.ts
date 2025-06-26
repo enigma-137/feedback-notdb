@@ -31,6 +31,7 @@ const db = createClient({
         email: { type: "string", required: true, unique: true },
         name: { type: "string", required: true },
         isAdmin: { type: "boolean", default: false },
+        password: { type: "string", required: true },
       },
     },
     feedback: {
