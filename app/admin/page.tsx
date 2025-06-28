@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+// import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -28,7 +28,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [responses, setResponses] = useState<Record<string, string>>({})
   const [updating, setUpdating] = useState<Record<string, boolean>>({})
-  const router = useRouter()
+  // const router = useRouter()
 
   useEffect(() => {
     fetchFeedback()
