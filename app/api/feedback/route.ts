@@ -16,7 +16,7 @@ export async function POST(request: Request) {
       rating: Number(rating),
       comment,
       category: category || "general",
-      status: "pending",
+      status: "open",
       adminResponse: "",
     })
 

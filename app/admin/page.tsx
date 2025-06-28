@@ -1,28 +1,121 @@
-import { cookies } from "next/headers"
-import db from "@/lib/nodb"
-import { redirect } from "next/navigation"
+"use client"
+
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Star, MessageSquare,  ArrowLeft, Send } from "lucide-react"
+import { Star, MessageSquare, ArrowLeft, Send } from "lucide-react"
 import Link from "next/link"
-// import type { Feedback } from "@/lib/nodb"
 
-export default async function AdminDashboard() {
-  const cookieStore = await cookies()
-  const adminSession = cookieStore.get("admin_session")?.value
-  const users = adminSession ? await db.users.find({ filter: { _id: adminSession }, limit: 1 }) : []
-  const user = users[0]
-  if (!user || !user.isAdmin) {
-    redirect("/admin/login")
+interface Feedback {
+  _id: string
+  userId: string
+  userName: string
+  userEmail: string
+  rating: number
+  comment: string
+  category: string
+  status: string
+  adminResponse?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export default function AdminDashboard() {
+  const [feedback, setFeedback] = useState<Feedback[]>([])
+  const [loading, setLoading] = useState(true)
+  const [responses, setResponses] = useState<Record<string, string>>({})
+  const [updating, setUpdating] = useState<Record<string, boolean>>({})
+  const router = useRouter()
+
+  useEffect(() => {
+    fetchFeedback()
+  }, [])
+
+  const fetchFeedback = async () => {
+    try {
+      const res = await fetch("/api/feedback")
+      if (res.ok) {
+        const data = await res.json()
+        setFeedback(data)
+      } else {
+        console.error("Failed to fetch feedback")
+      }
+    } catch (error) {
+      console.error("Error fetching feedback:", error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // Fetch feedback server-side
-  const feedback = await db.feedback.find({
-    sort: "-createdAt",
-  })
+  const updateFeedback = async (id: string, updates: { status?: string; adminResponse?: string }) => {
+    setUpdating(prev => ({ ...prev, [id]: true }))
+    try {
+      const res = await fetch(`/api/feedback/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      })
+
+      if (res.ok) {
+        // Update local state
+        setFeedback(prev => 
+          prev.map(item => 
+            item._id === id 
+              ? { ...item, ...updates }
+              : item
+          )
+        )
+        // Clear response text
+        setResponses(prev => ({ ...prev, [id]: "" }))
+      } else {
+        console.error("Failed to update feedback")
+      }
+    } catch (error) {
+      console.error("Error updating feedback:", error)
+    } finally {
+      setUpdating(prev => ({ ...prev, [id]: false }))
+    }
+  }
+
+  const deleteFeedback = async (id: string) => {
+    setUpdating(prev => ({ ...prev, [id]: true }))
+    try {
+      const res = await fetch(`/api/feedback/${id}`, {
+        method: "DELETE",
+      })
+
+      if (res.ok) {
+        // Remove from local state
+        setFeedback(prev => prev.filter(item => item._id !== id))
+        // Clear response text
+        setResponses(prev => ({ ...prev, [id]: "" }))
+      } else {
+        console.error("Failed to delete feedback")
+      }
+    } catch (error) {
+      console.error("Error deleting feedback:", error)
+    } finally {
+      setUpdating(prev => ({ ...prev, [id]: false }))
+    }
+  }
+
+  const handleStatusUpdate = (id: string, status: string) => {
+    updateFeedback(id, { status })
+  }
+
+  const handleClose = (id: string) => {
+    deleteFeedback(id)
+  }
+
+  const handleSendResponse = (id: string) => {
+    const response = responses[id]?.trim()
+    if (response) {
+      updateFeedback(id, { adminResponse: response, status: "reviewed" })
+    }
+  }
 
   const stats = {
     total: feedback.length,
@@ -57,6 +150,17 @@ export default async function AdminDashboard() {
       default:
         return "bg-gray-100 text-gray-800"
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading feedback...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -161,17 +265,33 @@ export default async function AdminDashboard() {
                     <Textarea
                       placeholder="Write your response..."
                       rows={3}
+                      value={responses[item._id] || ""}
+                      onChange={(e) => setResponses(prev => ({ ...prev, [item._id]: e.target.value }))}
                     />
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
-                        Mark as Reviewed
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleStatusUpdate(item._id, "reviewed")}
+                        disabled={updating[item._id] || item.status === "reviewed"}
+                      >
+                        {updating[item._id] ? "Updating..." : "Mark as Reviewed"}
                       </Button>
-                      <Button variant="outline" size="sm">
-                        Close
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleClose(item._id)}
+                        disabled={updating[item._id]}
+                      >
+                        {updating[item._id] ? "Deleting..." : "Delete"}
                       </Button>
-                      <Button size="sm">
+                      <Button 
+                        size="sm"
+                        onClick={() => handleSendResponse(item._id)}
+                        disabled={updating[item._id] || !responses[item._id]?.trim()}
+                      >
                         <Send className="mr-2 h-4 w-4" />
-                        Send Response
+                        {updating[item._id] ? "Sending..." : "Send Response"}
                       </Button>
                     </div>
                   </div>
